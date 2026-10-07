@@ -22,7 +22,11 @@ class SiegeRepository:
             .where(
                 ~Siege.reservations.any(
                     (Reservation.seance_id == seance_id)
-                    & (Reservation.statut.in_([StatutReservation.CONFIRMEE, StatutReservation.EN_ATTENTE]))
+                    & (
+                        Reservation.statut.in_(
+                            [StatutReservation.CONFIRMEE, StatutReservation.EN_ATTENTE]
+                        )
+                    )
                 )
             )
         )
@@ -40,11 +44,17 @@ class ReservationRepository:
         return reservation
 
     async def get_by_id(self, reservation_id: int) -> Reservation | None:
-        stmt = select(Reservation).options(selectinload(Reservation.siege), selectinload(Reservation.seance)).where(Reservation.id == reservation_id)
+        stmt = (
+            select(Reservation)
+            .options(selectinload(Reservation.siege), selectinload(Reservation.seance))
+            .where(Reservation.id == reservation_id)
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_by_siege_seance(self, siege_id: int, seance_id: int, statuts: list[StatutReservation]) -> Reservation | None:
+    async def get_by_siege_seance(
+        self, siege_id: int, seance_id: int, statuts: list[StatutReservation]
+    ) -> Reservation | None:
         stmt = select(Reservation).where(
             Reservation.siege_id == siege_id,
             Reservation.seance_id == seance_id,
@@ -53,7 +63,9 @@ class ReservationRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def update_statut(self, reservation_id: int, statut: StatutReservation) -> Reservation | None:
+    async def update_statut(
+        self, reservation_id: int, statut: StatutReservation
+    ) -> Reservation | None:
         reservation = await self.get_by_id(reservation_id)
         if reservation:
             reservation.statut = statut

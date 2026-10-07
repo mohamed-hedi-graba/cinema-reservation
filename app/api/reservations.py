@@ -3,8 +3,12 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.services.reservation import ReservationService, SeanceIntrouvableError, SiegeNonDisponibleError
-from app.models import Reservation, StatutReservation
+from app.models import StatutReservation
+from app.services.reservation import (
+    ReservationService,
+    SeanceIntrouvableError,
+    SiegeNonDisponibleError,
+)
 
 router = APIRouter(prefix="/reservations", tags=["Réservations"])
 
@@ -22,6 +26,7 @@ class ReservationResponse(BaseModel):
     spectateur_email: str
     statut: StatutReservation
     montant_cents: int
+    stripe_payment_intent_id: str | None
     expires_at: str | None
 
     class Config:
@@ -59,6 +64,7 @@ async def creer_reservation(
         spectateur_email=reservation.spectateur_email,
         statut=reservation.statut,
         montant_cents=reservation.montant_cents,
+        stripe_payment_intent_id=reservation.stripe_payment_intent_id,
         expires_at=reservation.expires_at.isoformat() if reservation.expires_at else None,
     )
 
@@ -72,7 +78,9 @@ async def confirmer_paiement(
     """UC-04: Effectuer un paiement - confirme la réservation après paiement Stripe"""
     service = ReservationService(session)
     try:
-        reservation = await service.confirmer_paiement(reservation_id, data.stripe_payment_intent_id)
+        reservation = await service.confirmer_paiement(
+            reservation_id, data.stripe_payment_intent_id
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -83,6 +91,7 @@ async def confirmer_paiement(
         spectateur_email=reservation.spectateur_email,
         statut=reservation.statut,
         montant_cents=reservation.montant_cents,
+        stripe_payment_intent_id=reservation.stripe_payment_intent_id,
         expires_at=reservation.expires_at.isoformat() if reservation.expires_at else None,
     )
 

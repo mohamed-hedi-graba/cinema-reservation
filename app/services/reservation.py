@@ -1,9 +1,9 @@
-from datetime import datetime, timedelta
-from sqlalchemy import select
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Reservation, Seance, Siege, StatutReservation
+from app.models import Reservation, Seance, StatutReservation
 from app.repositories import ReservationRepository, SiegeRepository
 
 
@@ -47,7 +47,9 @@ class ReservationService:
         # 2. Vérifier que le siège appartient à la salle de la séance
         siege = await self.siege_repo.get_by_id(siege_id)
         if not siege or siege.salle_id != seance.salle_id:
-            raise ValueError(f"Siège {siege_id} n'appartient pas à la salle de la séance {seance_id}")
+            raise ValueError(
+                f"Siège {siege_id} n'appartient pas à la salle de la séance {seance_id}"
+            )
 
         # 3. Tentative d'insertion avec contrainte UNIQUE (gère la concurrence au niveau BDD)
         reservation = Reservation(
@@ -56,7 +58,7 @@ class ReservationService:
             spectateur_email=spectateur_email,
             statut=StatutReservation.EN_ATTENTE,
             montant_cents=seance.prix_base_cents,
-            expires_at=datetime.utcnow() + timedelta(minutes=15),
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
 
         try:
@@ -73,12 +75,16 @@ class ReservationService:
                 raise SiegeNonDisponibleError(siege_id, seance_id)
             raise
 
-    async def confirmer_paiement(self, reservation_id: int, stripe_payment_intent_id: str) -> Reservation:
+    async def confirmer_paiement(
+        self, reservation_id: int, stripe_payment_intent_id: str
+    ) -> Reservation:
         reservation = await self.reservation_repo.get_by_id(reservation_id)
         if not reservation:
             raise ValueError(f"Réservation {reservation_id} introuvable")
         if reservation.statut != StatutReservation.EN_ATTENTE:
-            raise ValueError(f"Réservation {reservation_id} n'est pas en attente (statut: {reservation.statut})")
+            raise ValueError(
+                f"Réservation {reservation_id} n'est pas en attente (statut: {reservation.statut})"
+            )
 
         reservation.statut = StatutReservation.CONFIRMEE
         reservation.stripe_payment_intent_id = stripe_payment_intent_id
