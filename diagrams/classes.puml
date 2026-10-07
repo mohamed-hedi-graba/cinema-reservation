@@ -1,0 +1,124 @@
+@startuml
+!define RECTANGLE class
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 60
+
+package "Domaine" {
+  class Film {
+    +id: int
+    +titre: string
+    +description: string
+    +duree_minutes: int
+    +affiche_url: string
+  }
+
+  class Salle {
+    +id: int
+    +nom: string
+    +capacite: int
+  }
+
+  class Siege {
+    +id: int
+    +rang: string
+    +numero: int
+    +salle_id: int
+  }
+
+  class Seance {
+    +id: int
+    +film_id: int
+    +salle_id: int
+    +debut: DateTime
+    +fin: DateTime
+    +prix_base_cents: int
+  }
+
+  class Reservation {
+    +id: int
+    +seance_id: int
+    +siege_id: int
+    +spectateur_email: string
+    +statut: StatutReservation
+    +montant_cents: int
+    +stripe_payment_intent_id: string
+    +expires_at: DateTime
+  }
+
+  enum StatutReservation {
+    EN_ATTENTE
+    CONFIRMEE
+    ANNULEE
+    EXPIREE
+  }
+}
+
+package "Repositories" {
+  interface SiegeRepository {
+    +get_by_id(id: int): Siege?
+    +get_disponibles_pour_seance(seance_id: int): List<Siege>
+  }
+
+  interface ReservationRepository {
+    +create(reservation: Reservation): Reservation
+    +get_by_id(id: int): Reservation?
+    +get_by_siege_seance(siege_id, seance_id, statuts): Reservation?
+    +update_statut(id: int, statut: StatutReservation): Reservation?
+  }
+}
+
+package "Services" {
+  class ReservationService {
+    -session: AsyncSession
+    -reservation_repo: ReservationRepository
+    -siege_repo: SiegeRepository
+    +reserver_siege(seance_id, siege_id, email): Reservation
+    +confirmer_paiement(id, stripe_pid): Reservation
+    +annuler(id: int): Reservation
+  }
+
+  class SiegeNonDisponibleError <<Exception>>
+  class SeanceIntrouvableError <<Exception>>
+}
+
+package "API" {
+  class ReservationsRouter {
+    +POST /reservations
+    +POST /reservations/{id}/payer
+    +DELETE /reservations/{id}
+  }
+}
+
+' Relations domaine
+Salle "1" -- "0..*" Siege
+Salle "1" -- "0..*" Seance
+Film "1" -- "0..*" Seance
+Seance "1" -- "0..*" Reservation
+Siege "1" -- "0..*" Reservation
+Reservation "1" -- "1" StatutReservation
+
+' Relations repositories
+ReservationRepository ..> Reservation
+SiegeRepository ..> Siege
+
+' Relations services
+ReservationService --> ReservationRepository
+ReservationService --> SiegeRepository
+ReservationService ..> SiegeNonDisponibleError
+ReservationService ..> SeanceIntrouvableError
+
+' Relations API
+ReservationsRouter --> ReservationService
+
+note right of ReservationService
+  Gestion concurrence:
+  1. SELECT FOR UPDATE implicite
+     via contrainte UNIQUE BDD
+  2. Insert EN_ATTENTE (15 min)
+  3. IntegrityError → 409 Conflict
+end note
+
+@enduml

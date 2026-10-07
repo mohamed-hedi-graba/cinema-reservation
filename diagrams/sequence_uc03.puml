@@ -1,0 +1,59 @@
+@startuml
+skinparam sequenceMessageAlign center
+skinparam sequenceArrowFontSize 11
+skinparam noteFontSize 11
+skinparam monochrome false
+skinparam lifelineStrategy solid
+
+actor "Spectateur" as User
+participant "POST /reservations" as Controller
+participant "ReservationService" as Service
+participant "ReservationRepository" as RepoRes
+participant "SiegeRepository" as RepoSiege
+database "PostgreSQL" as DB
+
+== UC-03: Réserver une place (nominal) ==
+User -> Controller: POST {seance_id, siege_id, email}
+Controller -> Service: reserver_siege(seance_id, siege_id, email)
+
+note over Service: 1. Vérifier séance existe
+Service -> DB: SELECT * FROM seances WHERE id=?
+DB --> Service: Seance
+
+note over Service: 2. Vérifier siège appartient à la salle
+Service -> RepoSiege: get_by_id(siege_id)
+RepoSiege -> DB: SELECT * FROM sieges WHERE id=?
+DB --> RepoSiege: Siege
+RepoSiege --> Service: Siege
+
+note over Service: 3. Tentative insert avec contrainte UNIQUE
+Service -> RepoRes: create(Reservation EN_ATTENTE)
+RepoRes -> DB: INSERT INTO reservations ...\nON CONFLICT (seance_id, siege_id, statut) DO NOTHING
+alt Siège libre
+  DB --> RepoRes: INSERT OK (1 row)
+  RepoRes --> Service: Reservation
+  Service --> Controller: Reservation
+  Controller --> User: 201 Created {reservation}
+else Siège déjà réservé (conflit)
+  DB --> RepoRes: IntegrityError (unique violation)
+  RepoRes --> Service: Exception
+  Service -> RepoRes: get_by_siege_seance(siege_id, seance_id, [EN_ATTENTE, CONFIRMEE])
+  RepoRes -> DB: SELECT * FROM reservations WHERE ...
+  DB --> RepoRes: Reservation existante
+  RepoRes --> Service: Reservation
+  Service --> Controller: SiegeNonDisponibleError
+  Controller --> User: 409 Conflict "Siège déjà réservé"
+end
+
+== UC-03: Concurrence (2 users même siège) ==
+group Concurrence
+  User -> Controller: Requête 1 (Alice)
+  User -> Controller: Requête 2 (Bob)
+  Controller -> Service: reserver_siege(...) x2
+  Service -> DB: INSERT x2 (transaction parallèle)
+  DB --> Service: 1er INSERT OK, 2ème IntegrityError
+  Service --> Controller: 201 / 409
+  Controller --> User: Succès / Conflit
+end
+
+@enduml

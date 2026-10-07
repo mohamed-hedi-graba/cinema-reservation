@@ -1,0 +1,52 @@
+@startuml
+!define RECTANGLE class
+
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecaseBackgroundColor #F5F5F5
+skinparam usecaseBorderColor #333
+skinparam actorBackgroundColor #E8F5E9
+skinparam actorBorderColor #2E7D32
+
+package "Cinema Ticket Reservation" {
+  actor "Spectateur" as spectateur
+  actor "Gérant" as gerant
+  actor "Système Paiement" as paiement
+  actor "Service Notification" as notif
+
+  usecase "UC-01: Consulter les films" as uc1
+  usecase "UC-02: Consulter les séances" as uc2
+  usecase "UC-03: Réserver une place" as uc3
+  usecase "UC-04: Effectuer un paiement" as uc4
+  usecase "UC-05: Recevoir une confirmation" as uc5
+  usecase "UC-06: Annuler une réservation" as uc6
+  usecase "Gérer films & séances" as uc7
+  usecase "Consulter statistiques" as uc8
+}
+
+' Relations Spectateur
+spectateur --> uc1
+spectateur --> uc2
+spectateur --> uc3
+spectateur --> uc4
+spectateur --> uc5
+spectateur --> uc6
+
+' Relations Gérant
+gerant --> uc7
+gerant --> uc8
+
+' Relations systèmes externes
+uc4 --> paiement
+uc5 --> notif
+
+' Inclusions / Extensions
+uc3 .> uc4 : <<include>>\npaiement requis
+uc4 .> uc5 : <<include>>\nconfirmation auto
+uc6 .> uc4 : <<extend>>\nremboursement si payé
+
+note right of uc3 : ★ UC à risque technique\nConflit siège simultané
+note right of uc4 : Intégration Stripe/Adyen
+note right of uc5 : Envoi asynchrone\nEmail + SMS
+
+@enduml
